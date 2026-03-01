@@ -105,7 +105,7 @@ MONSTER_STATS: dict[str, dict] = {
         "str": 8, "dex": 14, "con": 10, "int": 10, "wis": 8, "cha": 8,
         "cr": 0.25, "emoji": "👺",
         "actions": ["短劍攻擊", "躲避（躲入掩體）"],
-        "traits": ["靈巧逃脫：可用附贈行動脱離接戰"],
+        "traits": ["靈巧逃脫：可用附贈行動脫離接戰"],
     },
     "hobgoblin": {
         "name_zh": "地獄地精", "hp": 11, "max_hp": 11, "ac": 18, "speed": 30,
@@ -121,7 +121,7 @@ MONSTER_STATS: dict[str, dict] = {
         "str": 15, "dex": 14, "con": 13, "int": 8, "wis": 11, "cha": 9,
         "cr": 1, "emoji": "🐻",
         "actions": ["晨星攻擊 × 2", "標槍（遠程）"],
-        "traits": ["突然襟擊：驚訝目標+2d6傷害", "長臂：近戰範圍10呎"],
+        "traits": ["突然襲擊：驚訝目標+2d6傷害", "長臂：近戰範圍10呎"],
     },
     "wolf": {
         "name_zh": "狼", "hp": 11, "max_hp": 11, "ac": 13, "speed": 40,
@@ -137,11 +137,11 @@ MONSTER_STATS: dict[str, dict] = {
         "str": 10, "dex": 14, "con": 15, "int": 6, "wis": 8, "cha": 5,
         "cr": 0.25, "emoji": "💀",
         "actions": ["短弓攻擊（遠程，1d6+2）", "短劍攻擊"],
-        "traits": ["不死免疫：毒素、疲勞、恐懼", "弱點：鈣擊傷害"],
+        "traits": ["不死免疫：毒素、疲勞、恐懼", "弱點：鈍擊傷害"],
     },
     "zombie": {
-        "name_zh": "僵屍", "hp": 22, "max_hp": 22, "ac": 8, "speed": 20,
-        "attack": "+3", "damage": "1d6+1", "damage_type": "鈣擊",
+        "name_zh": "殭屍", "hp": 22, "max_hp": 22, "ac": 8, "speed": 20,
+        "attack": "+3", "damage": "1d6+1", "damage_type": "鈍擊",
         "str": 13, "dex": 6, "con": 16, "int": 3, "wis": 6, "cha": 5,
         "cr": 0.25, "emoji": "🧟",
         "actions": ["鐵拳攻擊"],
@@ -182,7 +182,7 @@ MONSTER_STATS: dict[str, dict] = {
         "str": 17, "dex": 12, "con": 15, "int": 10, "wis": 11, "cha": 8,
         "cr": 3, "emoji": "👹",
         "actions": ["大斧攻擊 × 2", "投擲斧（遠程，1d8+3）"],
-        "traits": ["狂暴：HP低於27時進入狂暴狀態，攻擊+2傷害+3但AC-2", "恐嚇嚀叫：附贈行動，30呎內敵人DC12感知豁免或恐懼"],
+        "traits": ["狂暴：HP低於27時進入狂暴狀態，攻擊+2傷害+3但AC-2", "恐嚇嚎叫：附贈行動，30呎內敵人DC12感知豁免或恐懼"],
     },
     "nezznar": {
         "name_zh": "Nezznar（Black Spider）", "hp": 66, "max_hp": 66, "ac": 14, "speed": 30,
@@ -190,15 +190,92 @@ MONSTER_STATS: dict[str, dict] = {
         "str": 11, "dex": 14, "con": 13, "int": 18, "wis": 14, "cha": 16,
         "cr": 4, "emoji": "🕷️",
         "actions": [
-            "毒蜘攻擊（+5命中，1d8+3毒素，DC13體質豁免否則中毒）",
-            "蜘網射擊（遠程，DC12力量豁免否則束縛）",
+            "毒蛛攻擊（+5命中，1d8+3毒素，DC13體質豁免否則中毒）",
+            "蛛網射擊（遠程，DC12力量豁免否則束縛）",
             "黑暗術（60呎半徑，無光）",
             "魔法飛彈（3枚，1d4+1）",
         ],
-        "traits": ["蜘蛛感應：感知附近蜘蛛", "黑暗視覺：120呎", "聪明戰術：優先攻擊施法者"],
+        "traits": ["蜘蛛感應：感知附近蜘蛛", "黑暗視覺：120呎", "聰明戰術：優先攻擊施法者"],
         "spell_slots": {"1st": 4, "2nd": 3, "3rd": 2},
     },
 }
+
+
+# ── Dice-prompt registry ─────────────────────────────────────────────────────
+# Maps a canonical action keyword to the info the DM needs to ask a player to roll.
+# Structure: { key: { "label_zh": str, "dice": str, "stat": str, "dc_hint": int|None } }
+# "stat" is the character stat key used to look up the modifier (str/dex/con/int/wis/cha).
+# "dc_hint" is the typical passive DC for this check (None = DM decides in context).
+DICE_PROMPTS: dict[str, dict] = {
+    # ── Ability checks ────────────────────────────────────────
+    "athletics":        {"label_zh": "運動檢定",   "dice": "d20", "stat": "str", "dc_hint": None},
+    "acrobatics":       {"label_zh": "雜技檢定",   "dice": "d20", "stat": "dex", "dc_hint": None},
+    "sleight_of_hand":  {"label_zh": "手法檢定",   "dice": "d20", "stat": "dex", "dc_hint": None},
+    "stealth":          {"label_zh": "隱匿檢定",   "dice": "d20", "stat": "dex", "dc_hint": None},
+    "arcana":           {"label_zh": "奧秘檢定",   "dice": "d20", "stat": "int", "dc_hint": None},
+    "history":          {"label_zh": "歷史檢定",   "dice": "d20", "stat": "int", "dc_hint": None},
+    "investigation":    {"label_zh": "調查檢定",   "dice": "d20", "stat": "int", "dc_hint": None},
+    "nature":           {"label_zh": "自然檢定",   "dice": "d20", "stat": "int", "dc_hint": None},
+    "religion":         {"label_zh": "宗教檢定",   "dice": "d20", "stat": "int", "dc_hint": None},
+    "animal_handling":  {"label_zh": "馴獸檢定",   "dice": "d20", "stat": "wis", "dc_hint": None},
+    "insight":          {"label_zh": "洞察檢定",   "dice": "d20", "stat": "wis", "dc_hint": None},
+    "medicine":         {"label_zh": "醫療檢定",   "dice": "d20", "stat": "wis", "dc_hint": None},
+    "perception":       {"label_zh": "感知檢定",   "dice": "d20", "stat": "wis", "dc_hint": None},
+    "survival":         {"label_zh": "求生檢定",   "dice": "d20", "stat": "wis", "dc_hint": None},
+    "deception":        {"label_zh": "欺騙檢定",   "dice": "d20", "stat": "cha", "dc_hint": None},
+    "intimidation":     {"label_zh": "恐嚇檢定",   "dice": "d20", "stat": "cha", "dc_hint": None},
+    "performance":      {"label_zh": "表演檢定",   "dice": "d20", "stat": "cha", "dc_hint": None},
+    "persuasion":       {"label_zh": "說服檢定",   "dice": "d20", "stat": "cha", "dc_hint": None},
+    # ── Saving throws ─────────────────────────────────────────
+    "str_save":         {"label_zh": "力量豁免",   "dice": "d20", "stat": "str", "dc_hint": None},
+    "dex_save":         {"label_zh": "敏捷豁免",   "dice": "d20", "stat": "dex", "dc_hint": None},
+    "con_save":         {"label_zh": "體質豁免",   "dice": "d20", "stat": "con", "dc_hint": None},
+    "int_save":         {"label_zh": "智力豁免",   "dice": "d20", "stat": "int", "dc_hint": None},
+    "wis_save":         {"label_zh": "感知豁免",   "dice": "d20", "stat": "wis", "dc_hint": None},
+    "cha_save":         {"label_zh": "魅力豁免",   "dice": "d20", "stat": "cha", "dc_hint": None},
+    # ── Combat rolls ──────────────────────────────────────────
+    "initiative":       {"label_zh": "先攻骰",     "dice": "d20", "stat": "dex", "dc_hint": None},
+    "death_save":       {"label_zh": "死亡豁免",   "dice": "d20", "stat": None,  "dc_hint": 10},
+    "attack":           {"label_zh": "攻擊骰",     "dice": "d20", "stat": None,  "dc_hint": None},
+    "damage":           {"label_zh": "傷害骰",     "dice": None,  "stat": None,  "dc_hint": None},
+    # ── Common DCs for reference ──────────────────────────────
+    "lockpicking":      {"label_zh": "開鎖檢定",   "dice": "d20", "stat": "dex", "dc_hint": 15},
+    "climb":            {"label_zh": "攀爬檢定",   "dice": "d20", "stat": "str", "dc_hint": 12},
+    "swim":             {"label_zh": "游泳檢定",   "dice": "d20", "stat": "str", "dc_hint": 12},
+    "jump":             {"label_zh": "跳躍檢定",   "dice": "d20", "stat": "str", "dc_hint": 10},
+    "track":            {"label_zh": "追蹤檢定",   "dice": "d20", "stat": "wis", "dc_hint": 14},
+    "persuade_npc":     {"label_zh": "說服NPC",    "dice": "d20", "stat": "cha", "dc_hint": 15},
+    "deceive_npc":      {"label_zh": "欺騙NPC",    "dice": "d20", "stat": "cha", "dc_hint": 15},
+    "intimidate_npc":   {"label_zh": "恐嚇NPC",    "dice": "d20", "stat": "cha", "dc_hint": 13},
+    "search_trap":      {"label_zh": "搜索陷阱",   "dice": "d20", "stat": "wis", "dc_hint": 15},
+    "disarm_trap":      {"label_zh": "拆除陷阱",   "dice": "d20", "stat": "dex", "dc_hint": 15},
+    "identify_magic":   {"label_zh": "鑑定魔法",   "dice": "d20", "stat": "int", "dc_hint": 15},
+}
+
+
+def build_roll_prompt(action_key: str, username: str, char_stats: dict | None = None, dc: int | None = None) -> str:
+    """Return a Telegram-ready roll-request string for a player.
+
+    Example output:
+        @alice 請擲感知檢定 (d20+3)  DC 15
+    """
+    prompt = DICE_PROMPTS.get(action_key)
+    if not prompt:
+        return f"@{username} 請擲骰！"
+
+    label = prompt["label_zh"]
+    dice = prompt["dice"] or "d20"
+    stat_key = prompt["stat"]
+    effective_dc = dc or prompt.get("dc_hint")
+
+    mod_str = ""
+    if stat_key and char_stats:
+        score = char_stats.get(stat_key, 10)
+        mod = (score - 10) // 2
+        mod_str = f"+{mod}" if mod >= 0 else str(mod)
+
+    dc_str = f"  DC {effective_dc}" if effective_dc else ""
+    return f"@{username} 請擲{label} ({dice}{mod_str}){dc_str}"
 
 
 def get_monster_stats(monster_key: str) -> Optional[dict]:
