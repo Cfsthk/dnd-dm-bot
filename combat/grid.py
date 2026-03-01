@@ -17,22 +17,73 @@ def place_entities(grid: list[list[str]], entities: list[dict]) -> list[list[str
     return g
 
 
-def render_grid(entities: list[dict], width: int = 10, height: int = 8) -> str:
-    """Render the combat grid as an emoji string."""
+def place_items(grid: list[list[str]], items: list[dict], entities: list[dict]) -> tuple[list[list[str]], dict[tuple[int, int], list[dict]]]:
+    """Stamp item emojis onto the grid.
+
+    If a cell is already occupied by an entity, the entity emoji takes priority
+    and the item is recorded in `overlaps` so it can be shown in the legend.
+    Returns (updated_grid, overlaps) where overlaps maps (x,y) -> [item, ...].
+    """
+    import copy
+    g = copy.deepcopy(grid)
+    # Build a set of occupied cells
+    entity_cells: set[tuple[int, int]] = {
+        (e.get("x", 0), e.get("y", 0)) for e in entities
+    }
+    overlaps: dict[tuple[int, int], list[dict]] = {}
+
+    for item in items:
+        if not item.get("active", True):
+            continue
+        if item.get("owner_id"):      # picked up — not on the grid
+            continue
+        x, y = item.get("x", 0), item.get("y", 0)
+        if not (0 <= y < len(g) and 0 <= x < len(g[0])):
+            continue
+        cell = (x, y)
+        if cell in entity_cells:
+            # Entity takes the cell; record overlap for the legend
+            overlaps.setdefault(cell, []).append(item)
+        else:
+            g[y][x] = item.get("emoji", "📦")
+    return g, overlaps
+
+
+def render_grid(
+    entities: list[dict],
+    width: int = 10,
+    height: int = 8,
+    items: list[dict] | None = None,
+) -> tuple[str, dict[tuple[int, int], list[dict]]]:
+    """Render the combat grid as an emoji string.
+
+    Returns (grid_string, overlaps) where overlaps holds items sharing a cell
+    with an entity (to be shown in the item legend below the grid).
+    """
+    items = items or []
     grid = build_empty_grid(width, height)
     grid = place_entities(grid, entities)
+    grid, overlaps = place_items(grid, items, entities)
 
-    col_labels = "　" + "".join(str(i) for i in range(width))
+    col_labels = "\u3000" + "".join(str(i) for i in range(width))
     rows = [col_labels]
     for y, row in enumerate(grid):
         row_label = str(y)
         rows.append(row_label + "".join(row))
-    return "\n".join(rows)
+    return "\n".join(rows), overlaps
 
 
-def render_combat_status(entities: list[dict], round_num: int, current_name: str) -> str:
-    """Render the full combat panel: grid + HP bars."""
-    grid_str = render_grid(entities)
+def render_combat_status(
+    entities: list[dict],
+    round_num: int,
+    current_name: str,
+    items: list[dict] | None = None,
+) -> str:
+    """Render the full combat panel: grid + HP bars + item legend."""
+    items = items or []
+    grid_str, overlaps = render_grid(entities, items=items)
+
+    # ── HP bars ──────────────────────────────────────────────
     hp_lines = []
     for e in entities:
         hp = e.get("hp", 0)
@@ -50,11 +101,36 @@ def render_combat_status(entities: list[dict], round_num: int, current_name: str
             status = " ❤️受傷"
         conds = "、".join(e.get("conditions", [])) or ""
         cond_str = f" [{conds}]" if conds else ""
+
+        # Show item overlap indicator next to entity name
+        cell = (e.get("x", 0), e.get("y", 0))
+        overlap_str = ""
+        if cell in overlaps:
+            overlap_emojis = "".join(i.get("emoji", "📦") for i in overlaps[cell])
+            overlap_str = f" ⚠️{overlap_emojis}"
+
         hp_lines.append(
-            f"{e['emoji']} **{e['name']}** [{bar}] {hp}/{max_hp} HP{status}{cond_str}"
+            f"{e['emoji']} **{e['name']}** [{bar}] {hp}/{max_hp} HP{status}{cond_str}{overlap_str}"
         )
     hp_block = "\n".join(hp_lines)
-    return f"```\n{grid_str}\n```\n{hp_block}\n\n▶️ 現在輪到：**{current_name}**  第{round_num}輪"
+
+    # ── Item legend (ground items only) ──────────────────────
+    ground_items = [i for i in items if i.get("active", True) and not i.get("owner_id")]
+    item_lines = []
+    for i in ground_items:
+        itype_label = {"env": "環境", "loot": "戰利品", "hazard": "危險"}.get(i.get("item_type", "env"), "物件")
+        desc = f" — {i['description']}" if i.get("description") else ""
+        item_lines.append(
+            f"{i.get('emoji','📦')} **{i['name']}** ({itype_label}) 位置:({i['x']},{i['y']}){desc}"
+        )
+    item_block = ("\n🗺️ **場景物件**\n" + "\n".join(item_lines)) if item_lines else ""
+
+    return (
+        f"```\n{grid_str}\n```\n"
+        f"{hp_block}"
+        f"{item_block}\n\n"
+        f"▶️ 現在輪到：**{current_name}**  第{round_num}輪"
+    )
 
 
 def get_adjacent_cells(x: int, y: int, width: int, height: int) -> list[tuple[int, int]]:
