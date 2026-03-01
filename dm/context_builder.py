@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 from db import campaigns, characters, events
+from db import combat as combat_db
 from dm import module_lmop
 import config
 
@@ -30,11 +31,11 @@ def build_character_block(char: dict) -> str:
         f"玩家：@{char['username']} {char['emoji']}\n"
         f"  HP：{char['hp']}/{char['max_hp']}  AC：{char['armor_class']}  速度：{char['speed']}呎\n"
         f"  力量{stats.get('str',10)}({fmt_mod(mods.get('str',0))}) "
-        f"  敏捷{stats.get('dex',10)}({fmt_mod(mods.get('dex',0))}) "
-        f"  體質{stats.get('con',10)}({fmt_mod(mods.get('con',0))}) "
-        f"  智力{stats.get('int',10)}({fmt_mod(mods.get('int',0))}) "
-        f"  感知{stats.get('wis',10)}({fmt_mod(mods.get('wis',0))}) "
-        f"  魅力{stats.get('cha',10)}({fmt_mod(mods.get('cha',0))})\n"
+        f"敏捷{stats.get('dex',10)}({fmt_mod(mods.get('dex',0))}) "
+        f"體質{stats.get('con',10)}({fmt_mod(mods.get('con',0))}) "
+        f"智力{stats.get('int',10)}({fmt_mod(mods.get('int',0))}) "
+        f"感知{stats.get('wis',10)}({fmt_mod(mods.get('wis',0))}) "
+        f"魅力{stats.get('cha',10)}({fmt_mod(mods.get('cha',0))})\n"
         f"  狀態：{cond}  背包：{', '.join(char.get('inventory', [])) or '空'}"
         f"{spell_text}"
     )
@@ -57,6 +58,53 @@ def format_events_for_context(event_list: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def build_combat_context(campaign_id: str) -> str:
+    """Return a text block describing the live combat state (entities + items + positions).
+    Returns empty string if no active combat."""
+    combat = combat_db.get_active_combat(campaign_id)
+    if not combat:
+        return ""
+
+    entities = combat_db.get_entities(combat["id"])
+    items = combat_db.get_items(combat["id"]) if hasattr(combat_db, "get_items") else []
+    order = combat.get("initiative_order", [])
+    current_turn = combat.get("current_turn", 0)
+    round_num = combat.get("round_num", 1)
+    current_name = order[current_turn]["name"] if order else "？"
+
+    # Entity positions table
+    entity_lines = []
+    for e in entities:
+        username_str = f" (@{e['username']})" if e.get("username") else ""
+        conds = "、".join(e.get("conditions", [])) or "無"
+        entity_lines.append(
+            f"  {e['emoji']} {e['name']}{username_str} — 位置:({e['x']},{e['y']})  "
+            f"HP:{e['hp']}/{e['max_hp']}  AC:{e['ac']}  狀態:{conds}"
+        )
+
+    # Item positions table
+    item_lines = []
+    for i in items:
+        if not i.get("active", True):
+            continue
+        if i.get("owner_id"):
+            continue  # in someone's inventory, not on map
+        itype = {"env": "環境", "loot": "戰利品", "hazard": "危險"}.get(i.get("item_type", "env"), "物件")
+        desc = f" ({i['description']})" if i.get("description") else ""
+        item_lines.append(
+            f"  {i.get('emoji','📦')} {i['name']} [{itype}] 位置:({i['x']},{i['y']}){desc}"
+        )
+
+    entity_block = "\n".join(entity_lines) or "  （無戰鬥實體）"
+    item_block = ("\n場景物件：\n" + "\n".join(item_lines)) if item_lines else ""
+
+    return (
+        f"=== 戰鬥狀態（第{round_num}輪，現在輪到：{current_name}）===\n"
+        f"戰鬥實體位置：\n{entity_block}"
+        f"{item_block}\n"
+    )
+
+
 async def build_context(campaign: dict, user_message: str, user_name: str) -> list[dict]:
     campaign_id = campaign["id"]
     current_location = campaign.get("current_location", "phandalin_outskirts")
@@ -76,12 +124,16 @@ async def build_context(campaign: dict, user_message: str, user_name: str) -> li
 
     recent = events.get_recent_events(campaign_id, config.MAX_RECENT_EVENTS)
 
+    # Live combat context (empty string outside combat)
+    combat_context = build_combat_context(campaign_id)
+
     context_body = (
         f"=== 模組背景（地點：{current_location}，第{act}幕）===\n{module_context}\n\n"
         f"=== 冒險者資料 ===\n{char_blocks}\n\n"
         f"=== 世界狀態 ===\n{world_text}\n\n"
         f"=== 記憶摘要 ===\n{summary_text}\n\n"
-        f"=== 最近對話 ===\n{format_events_for_context(recent)}"
+        + (f"{combat_context}\n" if combat_context else "")
+        + f"=== 最近對話 ===\n{format_events_for_context(recent)}"
     )
 
     return [
@@ -120,10 +172,36 @@ def build_system_prompt() -> str:
 - 死亡豁免：HP=0時，每回合擲d20，10+成功，3次成功穩定，3次失敗死亡
 - 優勢/劣勢：擲兩粒d20取高/低
 
+【擲骰請求規定 — 非常重要】
+當劇情需要玩家擲骰時，你必須：
+1. 用 @用戶名 直接點名該玩家（格式：@username）
+2. 清楚說明要擲哪種骰子和修正值
+3. 說明DC（如適用）
+格式範例：
+  @alice 請擲感知檢定 (d20+感知修正)  DC 15
+  @bob 請擲力量豁免 (d20+力量修正)  DC 13
+  @charlie 請擲欺騙檢定 (d20+魅力修正)
+規則：
+- 只有真正需要擲骰的情況才請求（不要過度要求）
+- 必須根據「戰鬥狀態」區塊的實體資料，識別係邊個玩家做緊乜嘢行動
+- 若情況明顯不需要擲骰（例如普通對話），直接繼續故事
+
+【戰鬥格格識別】
+- 你可以在「戰鬥狀態」區塊看到所有人的位置座標
+- 根據玩家位置判斷：誰在近戰範圍、誰能被捲入AoE、誰可以援護
+- 描述戰鬥時主動提及玩家的相對位置（例如：「你同地精只係差一格之隔」）
+- 場景物件（環境物件、危險區域、戰利品）亦列於戰鬥狀態，請將之融入場景描述
+
+【場景物件互動】
+- 玩家接近loot（戰利品）時，提醒佢哋可以拾取
+- 玩家踏入hazard（危險）時，立即要求豁免骰
+- 玩家利用env（環境物件）時，根據描述決定效果（掩體+2AC、桶子可推倒等）
+
 【戰鬥職責】
 - 控制所有怪物行動，描述攻擊效果
 - 追蹤所有生物HP、狀態效應、集中法術
 - 怪物使用智慧戰術，不要總是衝向最近目標
+- 怪物會優先攻擊HP低或孤立的玩家
 
 【故事節奏】
 - 每隔30-40分鐘加入轉折或驚喜
