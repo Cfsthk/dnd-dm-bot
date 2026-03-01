@@ -28,13 +28,13 @@ def build_character_block(char: dict) -> str:
     return (
         f"【{char['name']}】({char['race']} {char['class']} Lv{char['level']}) "
         f"玩家：@{char['username']} {char['emoji']}\n"
-        f"  HP：{char['hp']}/{char['max_hp']}  AC：{char['armor_class']}  速度：{char['speed']}呆\n"
+        f"  HP：{char['hp']}/{char['max_hp']}  AC：{char['armor_class']}  速度：{char['speed']}呎\n"
         f"  力量{stats.get('str',10)}({fmt_mod(mods.get('str',0))}) "
-        f"敏捷{stats.get('dex',10)}({fmt_mod(mods.get('dex',0))}) "
-        f"體質{stats.get('con',10)}({fmt_mod(mods.get('con',0))}) "
-        f"智力{stats.get('int',10)}({fmt_mod(mods.get('int',0))}) "
-        f"感知{stats.get('wis',10)}({fmt_mod(mods.get('wis',0))}) "
-        f"魅力{stats.get('cha',10)}({fmt_mod(mods.get('cha',0))})\n"
+        f"  敏捷{stats.get('dex',10)}({fmt_mod(mods.get('dex',0))}) "
+        f"  體質{stats.get('con',10)}({fmt_mod(mods.get('con',0))}) "
+        f"  智力{stats.get('int',10)}({fmt_mod(mods.get('int',0))}) "
+        f"  感知{stats.get('wis',10)}({fmt_mod(mods.get('wis',0))}) "
+        f"  魅力{stats.get('cha',10)}({fmt_mod(mods.get('cha',0))})\n"
         f"  狀態：{cond}  背包：{', '.join(char.get('inventory', [])) or '空'}"
         f"{spell_text}"
     )
@@ -95,6 +95,12 @@ async def build_context(campaign: dict, user_message: str, user_name: str) -> li
 def build_system_prompt() -> str:
     return """你是一位精通龍與地下城第五版（2024年版）規則的地下城主（DM），所有對話必須使用繁體中文廣東話進行。
 
+【絕對語言規定 — 最高優先級】
+- 你只能用繁體中文廣東話回應，任何情況下都不可使用英文、普通話或其他語言
+- 即使玩家用英文或普通話發言，你依然必須用廣東話回應
+- 所有場景描述、NPC對話、規則裁決、戰鬥播報，全部廣東話
+- 違反此規定即視為嚴重錯誤，絕對不可發生
+
 【你的角色】
 - 充滿創意、公正、戲劇性的DM，擅長描述場景、推動故事發展
 - 記住玩家的所有決定，讓這些決定對世界產生真實影響
@@ -102,10 +108,10 @@ def build_system_prompt() -> str:
 - 永遠不會破壞沉浸感，除非需要解釋規則
 
 【語言要求】
-- 全程使用繁體中文廣東話
+- 全程使用繁體中文廣東話，絕無例外
 - 場景描述要生動，使用電影感語言
 - NPC對話要有獨特個性
-- 自然地使用廣東話口語（你哋、係咔、點解等）
+- 大量使用廣東話口語：你哋、係咪、點解、唔係、梗係、即係、而家、跟住、搞掂、冇問題等
 
 【規則執行 - DnD 5e 2024】
 - 攻擊：玩家報未修正d20 → 加修正值 → 判斷命中（對比AC）
