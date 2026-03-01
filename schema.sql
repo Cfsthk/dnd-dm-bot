@@ -132,12 +132,13 @@ create table if not exists combat_entities (
     combat_id    uuid not null references combat_sessions(id) on delete cascade,
     entity_type  text not null,  -- player | monster | npc
     name         text not null,
+    username     text,           -- Telegram @username (no @) for player entities
     x            int not null default 0,
     y            int not null default 0,
     hp           int not null default 10,
     max_hp       int not null default 10,
     ac           int not null default 10,
-    user_id      text,           -- set for player entities
+    user_id      text,           -- Telegram user_id for player entities
     char_id      uuid,           -- FK to characters for players
     emoji        text not null default '👾',
     conditions   jsonb not null default '[]',
@@ -147,6 +148,29 @@ create table if not exists combat_entities (
 
 create index if not exists idx_entities_combat  on combat_entities(combat_id);
 create index if not exists idx_entities_active  on combat_entities(combat_id, active);
+create index if not exists idx_entities_user_id on combat_entities(user_id);
+
+-- ============================================================
+-- 8. COMBAT ITEMS (environmental objects, loot, hazards on grid)
+-- ============================================================
+create table if not exists combat_items (
+    id           uuid primary key default gen_random_uuid(),
+    combat_id    uuid not null references combat_sessions(id) on delete cascade,
+    name         text not null,
+    emoji        text not null default '📦',
+    x            int not null default 0,
+    y            int not null default 0,
+    item_type    text not null default 'env',
+                 -- env (scenery/obstacle) | loot (collectible) | hazard (damages on enter)
+    description  text not null default '',
+    owner_id     uuid,           -- char_id once picked up by a player; null = on ground
+    active       boolean not null default true,
+    created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_items_combat  on combat_items(combat_id);
+create index if not exists idx_items_active  on combat_items(combat_id, active);
+create index if not exists idx_items_owner   on combat_items(owner_id);
 
 -- ============================================================
 -- Auto-update updated_at triggers
