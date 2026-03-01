@@ -12,7 +12,7 @@ import config
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "⚔️ **失落的芬德爾礦坑 DM Bot** 🐉\n\n"
-        "歡迎嘢到龍與地下城！我係你嘅AI地下城主。\n\n"
+        "歡迎嚟到龍與地下城！我係你嘅AI地下城主。\n\n"
         "**開始遊戲**\n"
         "• `/newgame` — 開始新戰役\n"
         "• `/newchar` — 建立角色\n"
@@ -31,13 +31,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "**DM工具**\n"
         "• `/setlocation <地點>` — 更改地點\n"
         "• `/setworld <鍵> <值>` — 設定世界狀態\n"
-        "• `/roll <骺子>` — 擲骺（例如 `/roll 2d6`）\n",
+        "• `/roll <骰子>` — 擲骰（例如 `/roll 2d6`）\n",
         parse_mode="Markdown",
     )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Main message handler — passes player input to the DM."""
+    """Main message handler — passes player input to the DM only when @mentioned."""
     chat_id = update.effective_chat.id
     campaign = campaigns.get_active_campaign(chat_id)
     if not campaign or campaign["status"] == "character_creation":
@@ -47,6 +47,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_message = update.message.text.strip()
     if not user_message:
         return
+
+    # In group chats, only respond when the bot is @mentioned
+    if update.effective_chat.type in ("group", "supergroup"):
+        bot_username = context.bot.username
+        if f"@{bot_username}" not in user_message:
+            return
+        # Strip the @mention from the message before passing to DM
+        user_message = user_message.replace(f"@{bot_username}", "").strip()
+        if not user_message:
+            return
 
     # Don't process if in active combat and it's not the player's turn
     combat = combat_db.get_active_combat(campaign["id"])
@@ -93,7 +103,7 @@ async def cmd_roll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode="Markdown",
         )
     except Exception:
-        await update.message.reply_text(f"無效的骺子格式：`{expr}`\n例如：`2d6`、`d20`、`4d6`", parse_mode="Markdown")
+        await update.message.reply_text(f"無效的骰子格式：`{expr}`\n例如：`2d6`、`d20`、`4d6`", parse_mode="Markdown")
 
 
 async def cmd_setworld(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
