@@ -1,0 +1,127 @@
+from __future__ import annotations
+from telegram import Update
+from telegram.ext import ContextTypes
+from db import campaigns, events as events_db
+from db.characters import get_character_by_user
+from db import combat as combat_db
+from dm import context_builder, memory_manager
+from dm.deepseek_client import chat
+import config
+
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "⚔️ **失落的芬德爾礦坑 DM Bot** 🐉\n\n"
+        "歡迎嘢到龍與地下城！我係你嘅AI地下城主。\n\n"
+        "**開始遊戲**\n"
+        "• `/newgame` — 開始新戰役\n"
+        "• `/newchar` — 建立角色\n"
+        "• `/startadventure` — 所有角色準備好後開始冒險\n\n"
+        "**遊戲中**\n"
+        "• 直接輸入行動描述（例如：「我要偵察前方」）\n"
+        "• `/status` — 查看戰役狀態\n"
+        "• `/mychar` — 查看我的角色\n"
+        "• `/recap` — 回顧故事\n\n"
+        "**戰鬥**\n"
+        "• `/startcombat [怪物] [數量]` — 開始戰鬥\n"
+        "• `/attack <目標> <d20> [傷害]` — 攻擊\n"
+        "• `/move <x> <y>` — 移動\n"
+        "• `/nextturn` — 下一輪\n"
+        "• `/combatgrid` — 查看戰鬥地圖\n\n"
+        "**DM工具**\n"
+        "• `/setlocation <地點>` — 更改地點\n"
+        "• `/setworld <鍵> <值>` — 設定世界狀態\n"
+        "• `/roll <骺子>` — 擲骺（例如 `/roll 2d6`）\n",
+        parse_mode="Markdown",
+    )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Main message handler — passes player input to the DM."""
+    chat_id = update.effective_chat.id
+    campaign = campaigns.get_active_campaign(chat_id)
+    if not campaign or campaign["status"] == "character_creation":
+        return  # Not in active adventure
+
+    user = update.effective_user
+    user_message = update.message.text.strip()
+    if not user_message:
+        return
+
+    # Don't process if in active combat and it's not the player's turn
+    combat = combat_db.get_active_combat(campaign["id"])
+    if combat and combat["status"] == "active":
+        order = combat["initiative_order"]
+        current_turn = combat["current_turn"]
+        if order:
+            current = order[current_turn]
+            if current["entity_type"] == "monster":
+                await update.message.reply_text(
+                    "⏳ 等等！現在係怪物的回合，請等待輪到你。（輸入 /nextturn 推進）"
+                )
+                return
+
+    # Log player action
+    events_db.log_event(
+        campaign["id"], user.first_name, user_message, event_type="player_action"
+    )
+
+    # Build context and call DM
+    await update.message.chat.send_action("typing")
+    messages = await context_builder.build_context(campaign, user_message, user.first_name)
+    response = await chat(messages, temperature=0.85, max_tokens=1024)
+
+    # Log DM response
+    events_db.log_event(campaign["id"], "DM", response, event_type="narrative")
+
+    # Compress memory if needed
+    await memory_manager.maybe_compress_memory(campaign["id"])
+
+    await update.message.reply_text(response, parse_mode="Markdown")
+
+
+async def cmd_roll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Roll dice. Usage: /roll 2d6, /roll d20, /roll 4d6"""
+    from combat.mechanics import roll as dice_roll
+    args = context.args or []
+    expr = args[0].lower() if args else "d20"
+    try:
+        total, rolls = dice_roll(expr)
+        rolls_str = " + ".join(str(r) for r in rolls)
+        await update.message.reply_text(
+            f"🎲 **{expr}** → [{rolls_str}] = **{total}**",
+            parse_mode="Markdown",
+        )
+    except Exception:
+        await update.message.reply_text(f"無效的骺子格式：`{expr}`\n例如：`2d6`、`d20`、`4d6`", parse_mode="Markdown")
+
+
+async def cmd_setworld(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set a world state key-value. Usage: /setworld <key> <value>"""
+    chat_id = update.effective_chat.id
+    campaign = campaigns.get_active_campaign(chat_id)
+    if not campaign:
+        await update.message.reply_text("目前沒有進行中的戰役。")
+        return
+    args = context.args or []
+    if len(args) < 2:
+        await update.message.reply_text("用法：`/setworld <鍵> <值>`\n例：`/setworld 西爾達已獲救 是`", parse_mode="Markdown")
+        return
+    key = args[0]
+    value = " ".join(args[1:])
+    campaigns.set_world_state(campaign["id"], key, value)
+    await update.message.reply_text(f"✅ 世界狀態已更新：**{key}** = {value}", parse_mode="Markdown")
+
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await cmd_start(update, context)
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.error("Exception while handling update:", exc_info=context.error)
+    if isinstance(update, Update) and update.message:
+        await update.message.reply_text(
+            "⚠️ 發生錯誤，請稍後再試。如問題持續請聯絡DM。"
+        )
