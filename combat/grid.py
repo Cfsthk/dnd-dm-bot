@@ -109,9 +109,16 @@ def render_combat_status(
             overlap_emojis = "".join(i.get("emoji", "📦") for i in overlaps[cell])
             overlap_str = f" ⚠️{overlap_emojis}"
 
-        hp_lines.append(
-            f"{e['emoji']} **{e['name']}** [{bar}] {hp}/{max_hp} HP{status}{cond_str}{overlap_str}"
-        )
+        is_monster = e.get("entity_type") == "monster"
+        if is_monster:
+            # Hide exact HP numbers for foes — show bar + status only
+            hp_lines.append(
+                f"{e['emoji']} **{e['name']}** [{bar}]{status}{cond_str}{overlap_str}"
+            )
+        else:
+            hp_lines.append(
+                f"{e['emoji']} **{e['name']}** [{bar}] {hp}/{max_hp} HP{status}{cond_str}{overlap_str}"
+            )
     hp_block = "\n".join(hp_lines)
 
     # ── Item legend (ground items only) ──────────────────────
