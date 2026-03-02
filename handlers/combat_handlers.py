@@ -176,8 +176,7 @@ async def cmd_attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
     elif not is_hit:
         result_text = (
-            f"❌ **未命中！** {attacker_name} 攻擊 {target['name']}\n"
-            f"攻擊骰：{d20_roll}+{attack_bonus}={total_attack} vs AC {target['ac']} — 未命中"
+            f"❌ **未命中！** {attacker_name} 攻擊 {target['name']}"
         )
     else:
         crit_text = " 💥**暴擊！**" if is_crit else ""
@@ -202,11 +201,14 @@ async def cmd_attack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             combat_db.remove_entity(target["id"])
             death_text = f"\n💀 **{target['name']} 倒下了！**"
         else:
-            death_text = f"\n{target['emoji']} {target['name']} 剩餘 HP：{new_hp}/{target['max_hp']}"
+            # Don't reveal monster max HP to players
+            if target.get("entity_type") == "monster":
+                death_text = f"\n{target['emoji']} {target['name']} 看起來仍在戰鬥！"
+            else:
+                death_text = f"\n{target['emoji']} {target['name']} 剩餘 HP：{new_hp}/{target['max_hp']}"
 
         result_text = (
-            f"⚔️{crit_text} **{attacker_name}** 攻擊 **{target['name']}**！\n"
-            f"攻擊骰：{d20_roll}+{attack_bonus}={total_attack} vs AC {target['ac']} — **命中！**\n"
+            f"⚔️{crit_text} **{attacker_name}** 攻擊 **{target['name']}** — **命中！**\n"
             f"傷害：**{damage}**{death_text}"
         )
         events_db.log_event(
@@ -282,12 +284,13 @@ async def cmd_nextturn(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     dmg, _ = mechanics.damage_roll(monster_stats["damage"], is_crit=is_crit)
                     new_hp = max(0, target["hp"] - dmg)
                     combat_db.damage_entity(target["id"], new_hp)
-                    hit_text = f"命中！造成 **{dmg}** 傷害，{target['name']} 剩餘 HP：{new_hp}"
+                    crit_text = "💥 **暴擊！**" if is_crit else "命中！"
+                    hit_text = f"{crit_text} {target['name']} 受到 **{dmg}** 點傷害！（剩餘 {new_hp}/{target['max_hp']} HP）"
                 else:
-                    hit_text = f"未命中（擲出{total} vs AC {target['ac']}）"
+                    hit_text = f"未命中！"
                 await update.message.reply_text(
                     f"👾 **{next_combatant['name']}** 攻擊 **{target['name']}**！\n"
-                    f"攻擊骰：{d20}+{total-d20}={total} — {hit_text}",
+                    f"{hit_text}",
                     parse_mode="Markdown",
                 )
                 events_db.log_event(
