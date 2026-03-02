@@ -88,6 +88,74 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Compress memory if needed
     await memory_manager.maybe_compress_memory(campaign["id"])
 
+    # Auto-start combat if DM included a [COMBAT:monster:count] tag
+    import re
+    combat_tag = re.search(r'\[COMBAT:(\w+):(\d+)\]', response)
+    if combat_tag and not (combat and combat["status"] == "active"):
+        monster_key = combat_tag.group(1)
+        count = int(combat_tag.group(2))
+        # Strip the tag from the displayed response
+        response = re.sub(r'\n?\[COMBAT:\w+:\d+\]', '', response).strip()
+        # Auto-initialize combat
+        from combat import mechanics as _mech, initiative as _init
+        from db.characters import get_characters as _get_chars
+        monster_stats = _mech.get_monster_stats(monster_key)
+        chars = _get_chars(campaign["id"])
+        if monster_stats and chars:
+            new_combat = combat_db.create_combat_session(campaign["id"])
+            combatants_for_init = []
+            player_emojis = config.PLAYER_EMOJIS[:]
+            for i, char in enumerate(chars):
+                emoji = char.get("emoji", player_emojis[i % len(player_emojis)])
+                combat_db.add_entity(
+                    new_combat["id"], "player", char["name"],
+                    x=2, y=i + 1,
+                    hp=char["hp"], max_hp=char["max_hp"],
+                    ac=char["armor_class"],
+                    user_id=str(char["user_id"]),
+                    username=char.get("username", ""),
+                    char_id=char["id"],
+                    emoji=emoji,
+                )
+                combatants_for_init.append({
+                    "id": char["id"], "name": char["name"],
+                    "dex": char["stats"].get("dex", 10),
+                    "entity_type": "player", "emoji": emoji,
+                })
+            monster_emoji = config.MONSTER_EMOJIS.get(monster_key, config.MONSTER_EMOJIS["default"])
+            for i in range(count):
+                m_name = f"{monster_stats['name_zh']}{i+1}"
+                combat_db.add_entity(
+                    new_combat["id"], "monster", m_name,
+                    x=7, y=i + 2,
+                    hp=monster_stats["hp"], max_hp=monster_stats["max_hp"],
+                    ac=monster_stats["ac"],
+                    emoji=monster_emoji,
+                )
+                combatants_for_init.append({
+                    "id": f"monster_{i}", "name": m_name,
+                    "dex": monster_stats.get("dex", 10),
+                    "entity_type": "monster", "emoji": monster_emoji,
+                })
+            order = _init.build_initiative_order(combatants_for_init)
+            order_for_db = [
+                {"name": c["name"], "entity_type": c["entity_type"],
+                 "initiative": c["initiative_total"], "emoji": c["emoji"]}
+                for c in order
+            ]
+            combat_db.update_combat(new_combat["id"], {
+                "initiative_order": order_for_db,
+                "current_turn": 0,
+                "status": "active",
+            })
+            events_db.log_event(
+                campaign["id"], "系統",
+                f"自動戰鬥開始：{count}隻{monster_stats['name_zh']}",
+                event_type="combat",
+            )
+            # Refresh combat object for grid rendering below
+            combat = combat_db.get_active_combat(campaign["id"])
+
     # In active combat, always prepend the emoji grid above the DM narrative
     if combat and combat["status"] == "active":
         try:
