@@ -26,7 +26,6 @@ def place_items(grid: list[list[str]], items: list[dict], entities: list[dict]) 
     """
     import copy
     g = copy.deepcopy(grid)
-    # Build a set of occupied cells
     entity_cells: set[tuple[int, int]] = {
         (e.get("x", 0), e.get("y", 0)) for e in entities
     }
@@ -35,14 +34,13 @@ def place_items(grid: list[list[str]], items: list[dict], entities: list[dict]) 
     for item in items:
         if not item.get("active", True):
             continue
-        if item.get("owner_id"):      # picked up — not on the grid
+        if item.get("owner_id"):
             continue
         x, y = item.get("x", 0), item.get("y", 0)
         if not (0 <= y < len(g) and 0 <= x < len(g[0])):
             continue
         cell = (x, y)
         if cell in entity_cells:
-            # Entity takes the cell; record overlap for the legend
             overlaps.setdefault(cell, []).append(item)
         else:
             g[y][x] = item.get("emoji", "📦")
@@ -55,10 +53,9 @@ def render_grid(
     height: int = 8,
     items: list[dict] | None = None,
 ) -> tuple[str, dict[tuple[int, int], list[dict]]]:
-    """Render the combat grid as an emoji string.
+    """Render the combat grid as an emoji string (no row/col labels).
 
-    Returns (grid_string, overlaps) where overlaps holds items sharing a cell
-    with an entity (to be shown in the item legend below the grid).
+    Returns (grid_string, overlaps).
     """
     items = items or []
     grid = build_empty_grid(width, height)
@@ -77,15 +74,11 @@ def render_combat_status(
     current_name: str,
     items: list[dict] | None = None,
 ) -> str:
-    """Render the full combat panel: grid + HP bars + item legend.
-    
-    Note: Grid is rendered as plain emoji without code block fences to ensure
-    proper emoji rendering in Discord/Telegram DMs.
-    """
+    """Render the full combat panel: grid + HP bars + item legend."""
     items = items or []
     grid_str, overlaps = render_grid(entities, items=items)
 
-    # ── HP bars ──────────────────────────────────────────────
+    # HP bars
     hp_lines = []
     for e in entities:
         hp = e.get("hp", 0)
@@ -104,7 +97,6 @@ def render_combat_status(
         conds = "、".join(e.get("conditions", [])) or ""
         cond_str = f" [{conds}]" if conds else ""
 
-        # Show item overlap indicator next to entity name
         cell = (e.get("x", 0), e.get("y", 0))
         overlap_str = ""
         if cell in overlaps:
@@ -113,7 +105,6 @@ def render_combat_status(
 
         is_monster = e.get("entity_type") == "monster"
         if is_monster:
-            # Show only damage taken, no bar and no max HP
             damage_taken = max_hp - hp
             dmg_str = f"-{damage_taken} 傷害" if damage_taken > 0 else "未受傷"
             hp_lines.append(
@@ -125,7 +116,7 @@ def render_combat_status(
             )
     hp_block = "\n".join(hp_lines)
 
-    # ── Item legend (ground items only) ──────────────────────
+    # Item legend
     ground_items = [i for i in items if i.get("active", True) and not i.get("owner_id")]
     item_lines = []
     for i in ground_items:
