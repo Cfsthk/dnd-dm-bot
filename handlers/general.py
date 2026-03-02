@@ -6,6 +6,7 @@ from db.characters import get_character_by_user
 from db import combat as combat_db
 from dm import context_builder, memory_manager
 from dm.deepseek_client import chat
+from combat import grid as combat_grid
 import config
 
 
@@ -87,7 +88,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Compress memory if needed
     await memory_manager.maybe_compress_memory(campaign["id"])
 
-    await update.message.reply_text(response, parse_mode="Markdown")
+    # In active combat, always prepend the emoji grid above the DM narrative
+    if combat and combat["status"] == "active":
+        try:
+            entities = combat_db.get_entities(combat["id"])
+            # Try to get items, fall back to empty list if not available
+            try:
+                items = combat_db.get_items(combat["id"])
+            except AttributeError:
+                items = []
+            order = combat.get("initiative_order", [])
+            current_turn = combat.get("current_turn", 0)
+            round_num = combat.get("round_num", 1)
+            current_name = order[current_turn]["name"] if order and len(order) > current_turn else "？"
+            grid_str = combat_grid.render_combat_status(
+                entities, round_num=round_num, current_name=current_name, items=items
+            )
+            full_reply = f"{grid_str}\n\n{response}"
+        except Exception as e:
+            # Log the error but don't fail the message
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to render combat grid: {e}")
+            full_reply = response  # fall back gracefully if grid fails
+    else:
+        full_reply = response
+
+    await update.message.reply_text(full_reply, parse_mode="Markdown")
 
 
 async def cmd_roll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
