@@ -65,11 +65,9 @@ def render_grid(
     grid = place_entities(grid, entities)
     grid, overlaps = place_items(grid, items, entities)
 
-    col_labels = "\u3000" + "".join(str(i) for i in range(width))
-    rows = [col_labels]
-    for y, row in enumerate(grid):
-        row_label = str(y)
-        rows.append(row_label + "".join(row))
+    rows = []
+    for row in grid:
+        rows.append("".join(row))
     return "\n".join(rows), overlaps
 
 
@@ -79,7 +77,11 @@ def render_combat_status(
     current_name: str,
     items: list[dict] | None = None,
 ) -> str:
-    """Render the full combat panel: grid + HP bars + item legend."""
+    """Render the full combat panel: grid + HP bars + item legend.
+    
+    Note: Grid is rendered as plain emoji without code block fences to ensure
+    proper emoji rendering in Discord/Telegram DMs.
+    """
     items = items or []
     grid_str, overlaps = render_grid(entities, items=items)
 
@@ -135,7 +137,7 @@ def render_combat_status(
     item_block = ("\n🗺️ **場景物件**\n" + "\n".join(item_lines)) if item_lines else ""
 
     return (
-        f"```\n{grid_str}\n```\n"
+        f"{grid_str}\n"
         f"{hp_block}"
         f"{item_block}\n\n"
         f"▶️ 現在輪到：**{current_name}**  第{round_num}輪"
