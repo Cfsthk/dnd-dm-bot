@@ -113,7 +113,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     hp=char["hp"], max_hp=char["max_hp"],
                     ac=char["armor_class"],
                     user_id=str(char["user_id"]),
-                    username=char.get("username", ""),
                     char_id=char["id"],
                     emoji=emoji,
                 )
