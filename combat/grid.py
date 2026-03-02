@@ -111,9 +111,11 @@ def render_combat_status(
 
         is_monster = e.get("entity_type") == "monster"
         if is_monster:
-            # Hide exact HP numbers for foes — show bar + status only
+            # Show only damage taken, no bar and no max HP
+            damage_taken = max_hp - hp
+            dmg_str = f"-{damage_taken} 傷害" if damage_taken > 0 else "未受傷"
             hp_lines.append(
-                f"{e['emoji']} **{e['name']}** [{bar}]{status}{cond_str}{overlap_str}"
+                f"{e['emoji']} **{e['name']}** {dmg_str}{status}{cond_str}{overlap_str}"
             )
         else:
             hp_lines.append(
